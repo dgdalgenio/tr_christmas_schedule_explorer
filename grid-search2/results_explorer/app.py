@@ -845,14 +845,26 @@ with tab_deep:
                     "written for runs whose final headcount is below the download threshold given to `run.sh`.")
         else:
             thr = thresholds_for(sel, check_key, defaults)
-            rows = violation_rows(sched_path, os.path.getmtime(sched_path), thr)
+            all_rows = violation_rows(sched_path, os.path.getmtime(sched_path), thr)
+            days_avail = [d for d in DAYS if d in set(all_rows["Day"])]
+            day_default = [d for d in ("Thursday", "Friday") if d in days_avail] or days_avail
+            viol_days = st.multiselect(
+                "Days to check", days_avail, default=day_default, key="viol_days",
+                help="Only these days' schedules are checked. Defaults to Thursday and Friday; "
+                     "select all seven for the whole week.")
+            if not viol_days:
+                st.warning("No day selected — showing the whole week.")
+                viol_days = days_avail
+            rows = all_rows[all_rows["Day"].isin(viol_days)]
+            scope = "the whole week" if set(viol_days) == set(days_avail) else ", ".join(d[:3] for d in viol_days)
             summ = summarise_violations(rows)
             hc = int(summ.get("v_headcount", 0))
-            st.markdown(f"Measured against **{check_mode}**. A rule is broken when …")
+            st.markdown(f"Measured against **{check_mode}**, on **{scope}**. A rule is broken when …")
             a, b, c = st.columns(3)
             a.metric("Agents breaking any rule", f"{int(summ['v_agents_any'])} of {hc}",
-                     help="Unique agents with at least one violation on any day.")
-            b.metric("% of headcount", f"{summ['v_pct_any']:.1f}%")
+                     help="Unique agents with at least one violation on the selected days. "
+                          "'Of' counts the agents scheduled on those days.")
+            b.metric("% of agents on these days", f"{summ['v_pct_any']:.1f}%")
             c.metric("Agent-days with a violation", f"{int(summ['v_days_any'])}")
             rtab = []
             for k, t in zip(RULE_KEYS, thr):
@@ -861,11 +873,11 @@ with tab_deep:
                 ser = rows[worst[0]].dropna()
                 rtab.append({
                     "Rule": RULES[k][2], "Breaks when": f"{RULES[k][1]} {t if t is not None else '—'} min",
-                    "Agents": int(summ[f"v_agents_{k}"]), "% of headcount": 100.0 * summ[f"v_agents_{k}"] / max(1, hc),
+                    "Agents": int(summ[f"v_agents_{k}"]), "% of agents on these days": 100.0 * summ[f"v_agents_{k}"] / max(1, hc),
                     "Agent-days": int(summ[f"v_days_{k}"]), "Violating stretches": int(summ[f"v_events_{k}"]),
                     "Worst value (min)": (int(ser.min() if worst[1] == "min" else ser.max()) if len(ser) else None)})
             st.dataframe(pd.DataFrame(rtab), hide_index=True, width="stretch",
-                         column_config={"% of headcount": st.column_config.NumberColumn(format="%.1f%%")})
+                         column_config={"% of agents on these days": st.column_config.NumberColumn(format="%.1f%%")})
 
             focus = st.selectbox("Look closer at", RULE_KEYS, index=RULE_KEYS.index("adj"),
                                  format_func=lambda k: RULES[k][2], key="viol_focus")
