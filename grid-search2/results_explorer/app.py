@@ -817,7 +817,7 @@ with tab_deep:
     m5.metric("Efficiency ratio", f"{sel['efficiency_efficiencyRatio']:.3f}",
               help=f"surplus stdev {sel['efficiency_surplusStdevPct']:.2f}%")
 
-    s_over, s_viol, s_curve = st.tabs(["Set-up", "Rule breaks", "Net staffing curve"])
+    s_over, s_heat, s_viol, s_curve = st.tabs(["Set-up", "Pattern × tier", "Rule breaks", "Net staffing curve"])
 
     with s_over:
         left, right = st.columns([1, 1])
@@ -838,6 +838,13 @@ with tab_deep:
                                    "deficit intervals": [int(sel[f"deficits_{DAY_ABBR[d]}"]) for d in DAYS],
                                    "worst deficit": [sel[f"worst_deficit_{DAY_ABBR[d]}"] for d in DAYS]}).astype(str).T,
                      width="stretch")
+
+    with s_heat:
+        hm = np.array([[sel[f"HC_{t}__{p}"] for p in PATTERNS] for t in TIERS], dtype=float)
+        plot(heatmap(hm, f"Agents: work pattern × tier — {choice.split('·')[0].strip()} "
+                         f"({choice.split('·')[1].strip()})"), width="stretch")
+        st.caption(f"{int(hm.sum())} agents in total. 5x9 is the only non-flexi pattern; every other pattern "
+                   "counts towards the flexi cap. Empty cells have no agents.")
 
     with s_viol:
         if not sched_path:
